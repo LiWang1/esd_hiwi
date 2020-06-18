@@ -1,3 +1,3 @@
-Student Research Assitant for ESD group
+## HiWi work content: 
 
-### fuzzy matching of Chinese and English; 
+### 1) fuzzy matching of Chinese and English; 
