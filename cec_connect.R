@@ -22,17 +22,25 @@ cec$short_name = gsub("达赉湖","满洲里",cec$short_name)
 cec$short_name = gsub("太仓协鑫","协鑫太仓",cec$short_name)
 
 cec$year_num =as.numeric(format(as.Date(cec$year, format="%Y-%m-%d"),"%Y"))
+
+# initialize 
+plant_data$cec_plant_code_test = NA
+plant_data$cec_unit_code_test = NA
 cec$check_status = 0
 
+# connect: 
 for(j in 1:nrow(cec)){
   #j = 71
   #j = 285
-  #j = 194
+  #j = 462
+  #j = 768
+  #j = 727 # 华能内蒙包二"
+  #j = 1081 #"中电投江西景德镇"
+  
   seg = seg_chs(cec$short_name[j]) # segment chinese 
   seg
   state = cec$state_en           # state information 
-  
-  
+  　
   num_info = vector()
   keyword_info = vector()
   company_info = vector()
@@ -93,6 +101,7 @@ for(j in 1:nrow(cec)){
   
   # 2.4) num_info index 
   num_info= unique(num_info)
+  num_info
   index_num = vector()
   if(length(num_info) >= 1){
     index_num = which(stri_detect_fixed(plant_data$PLANT,num_info[1]))
@@ -101,7 +110,7 @@ for(j in 1:nrow(cec)){
   # 2.5) WM_info index 
   index_wm = vector()
   if(!is.na(cec$MW[j])){
-    index_wm = which(abs(plant_data$MW-cec$MW[j])<=50)
+    index_wm = which(abs(plant_data$MW-cec$MW[j])<=30)
   }
   #if(is.na(cec$MW[j])){
   #  index_wm = 1:nrow(plant_data)
@@ -124,8 +133,8 @@ for(j in 1:nrow(cec)){
     if(length(unique(plant_data$plant_company[index_cor]))==1){
       plant_data$cec_plant_code_test[index_cor] = cec$plant_code[j]
     }
+    
     else{
-      #index_cor = intersect(index_cor, index_year_wm)
       index_cor = intersect(uniqueon(index_key, index_company), intersect(index_state,index_year_wm))
       plant_data$cec_plant_code_test[index_cor] = cec$plant_code[j]
     }
@@ -137,6 +146,7 @@ for(j in 1:nrow(cec)){
       plant_data$cec_plant_code_test[index_cor] = cec$plant_code[j]
     }
     else{
+      #index_cor = intersect(intersect(index_key, index_company), intersect(index_state, index_num))
       index_cor = intersect(uniqueon(index_key, index_company), intersect(index_state, index_num))
       index_cor = intersect(index_cor, index_year_wm)
       plant_data$cec_plant_code_test[index_cor] = cec$plant_code[j]
@@ -154,4 +164,25 @@ sum(cec$check_status ==1)/length(cec$check_status)
 both_fill = which(!is.na(plant_data$CEC_PLANT_CODE) & !is.na(plant_data$cec_plant_code_test))
 # accurate rate: 
 sum(plant_data$CEC_PLANT_CODE[both_fill]==plant_data$cec_plant_code_test[both_fill])/length(both_fill)
+
+
+# unit code: 
+cec$use_status = 0
+
+for(i in 1:nrow(plant_data)){
+  if(!is.na(plant_data$cec_plant_code_test[i])){
+    index_code = which((plant_data$cec_plant_code_test[i]==cec$plant_code)
+                       &abs(plant_data$MW[i]-cec$MW)<100
+                       &abs(plant_data$YEAR[i]-cec$year_num)<=1
+                       &cec$use_status==0)
+    index=min(index_code)
+    plant_data$cec_unit_code_test[i] = cec$unit_name[index] 
+    cec$use_status[index] = 1
+  }
+} 
+
+index_no_fill = which(is.na(plant_data$cec_unit_code_test) & !is.na(plant_data$cec_plant_code_test))
+
+plant_data$cec_unit_code_test[index_no_fill] = substrRight(plant_data$UNIT[index_no_fill],1)
+
 

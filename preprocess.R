@@ -43,8 +43,8 @@ plant_data$PLANT = gsub("ewenki", "ewenke", plant_data$PLANT)
 plant_data$PLANT = gsub("korla", "kela", plant_data$PLANT) 
 plant_data$PLANT = gsub("urumqi", "wulumuqi", plant_data$PLANT) 
 plant_data$PLANT = gsub("ordos", "eerduosi", plant_data$PLANT) 
-plant_data$PLANT = gsub("sanshui/hengyi", "hengyi", plant_data$PLANT) 
-
+plant_data$PLANT = gsub("sanshui", "sanshui/hengyi", plant_data$PLANT) 
+plant_data$PLANT = gsub("tongfa", "tonghua", plant_data$PLANT) 
 ########################
 # company names issues 
 
@@ -74,6 +74,12 @@ plant_data$COMPANY[index_jing] = "jingneng"
 # wenergy ->皖能 -> wanneng
 index_jing = which(stri_detect_fixed(plant_data$COMPANY, "wenergy"))
 plant_data$COMPANY[index_jing] = "wanneng"
+
+# guizhou-guangxi power -> 黔桂 -> qiangui
+index_qg = which(stri_detect_fixed(plant_data$COMPANY, "guizhou-guangxi power"))
+plant_data$COMPANY[index_qg] = "qiangui"
+
+
 
 # JIAXING POWER/ZHEJIANG PROV ENERGY GROUP CO -> 浙能 -> zheneng
 index_zn1 = which(stri_detect_fixed(plant_data$COMPANY, "jiaxing power"))
@@ -126,6 +132,8 @@ plant_data$COMPANY[index_yd] = "yuedian"
 ######################
 
 plant_data$plant_company = paste(tolower(plant_data$COMPANY), tolower(plant_data$PLANT))
+#plant_data$plant_company = paste(tolower(plant_data$COMPANY), tolower(plant_data$PLANT), 
+#                                 tolower(iconv(plant_data$CITY,"WINDOWS-1252","UTF-8")))
 plant_data$plant_company_extend = paste(tolower(plant_data$COMPANY), tolower(plant_data$PLANT), 
                                         tolower(iconv(plant_data$CITY,"WINDOWS-1252","UTF-8")))
 
@@ -140,14 +148,16 @@ plant_data$yearbook_unique_checking=NA
 # pinyin translation: 
 library(pinyin)
 mypy <- pydic(method = 'toneless', dic = "pinyin2")
+mypy[["荥"]] = "xing"
 pinyin_trans <- function(data){
   pinyin = py(data, dic = mypy, sep = '') 
   pinyin = data.frame(keyName=names(pinyin), value=pinyin, row.names=NULL, stringsAsFactors = FALSE)$value
   return(pinyin)
 }
 
+
 # google translation: 
-APIkey= ""
+APIkey= "AIzaSyCFtOytfyyzseR7FrHiYxFv91LtMvZSAXM"
 library(translateR)
 google_trans <- function(chs){
   chs = tolower(translate(content.vec = chs ,google.api.key =APIkey,source.lang = "zh-CN", target.lang="en"))
@@ -156,11 +166,14 @@ google_trans <- function(chs){
 
 # chinese segement
 library("jiebaR")
-mixseg = worker()
+readLines("stop.txt")
+mixseg = worker(stop_word = "stop.txt")
+#mixseg = worker()
+#mixseg = worker(type = "mp")
 # add to libraries 
 user_words = c("三百门","吉林","长春","田家庵","广西","北海",'辽宁', "大连", "天生港", "粤电", "台山", "集团", "陈家港", "白音华", "霍煤", "鸿骏"
-               ,"华能",'大唐','浙能','神华','国能','国华','国电', '华电', '鲁能','国投','华润','粤电','中电投',"射阳港", "淮沪", "平圩","三厂"
-               ,'华能','福能','申能','京能','皖能','协鑫', "上电", "华阳", "万kW", "华淮", "同华", "轩岗", "燃机电厂","深能", "恒益", "同煤", "中煤")
+               ,"华能",'大唐','浙能','神华','国能','国华','国电', '华电', '鲁能','国投','华润','粤电','中电投',"射阳港", "淮沪", "平圩","三厂","热"
+               ,'华能','福能','申能','京能','皖能','协鑫', "上电", "华阳", "万kW", "华淮", "同华", "轩岗", "燃机电厂","深能","黔桂", "恒益", "同煤", "中煤")
 for(i in user_words){
   new_user_word(mixseg,i,"n")
 }
@@ -170,15 +183,6 @@ seg_chs <-function(words){
   return(seg)
 }
 
-detect_string <- function(long, short){
-  if(length(short)>0){
-    index = which(stri_detect_fixed(long, short))
-  }
-  if(short==""){
-    index = 1:nrow(long)
-  }
-  return(index)
-}
 
 uniqueon <- function(index_key, index_company){
   
@@ -212,18 +216,11 @@ state_words = c("北京", "湖南","天津", "广东", "河北", "广西", "山�
                 "甘肃","安徽","青海", "福建","宁夏","江西","新疆","山东","台湾", "河南", "香港","湖北","澳门")
 
 company_words = c("华能",'大唐','浙能','神华','国能','国华','国电', '华电', '鲁能','国投','华润','粤电','中电',"赣能",
-                  '中电投','华能','福能','申能','京能','皖能','协鑫', "上电", "华阳", "中煤", "建投", "深能", "国网","同煤", "百年" )
+                  '中电投','华能','福能','申能','京能','皖能','协鑫', "上电", "华阳", "中煤", "建投", "深能", "国网","同煤", "百年","黔桂" )
 
 num_words = c("第四","第三", "第二", "第一", "C", "A", "B","D", 'a', 'b', 'c', 'd',
-              '4', '3', '2', '1', '四', '三', '二', '一', '四厂', '三厂', '二厂', '一厂',"三热", "二热","一热")
+              '4', '3', '2', '1', '四', '三', '二', '一', '四厂', '三厂', '二厂', '一厂',"三热", "二热","一热", "包二", '哈三', '外一', '外二', '外三')
 num_words_ch = c("4","3", "2", "1", "c", "a", "b","d", 'a', 'b', 'c', 'd', 
-                 '4', '3', '2', '1', '4', '3', '2', '1', '4', '3', '2', '1', '3', '2', '1')
-
-
-
-
-
-
-
+                 '4', '3', '2', '1', '4', '3', '2', '1', '4', '3', '2', '1', '3', '2', '1',"baotou-2", "haerbin-3", "waigaoqiao -1", "waigaoqiao -2", "waigaoqiao -3")
 
 
