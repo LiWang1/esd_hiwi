@@ -157,7 +157,7 @@ pinyin_trans <- function(data){
 
 
 # google translation: 
-APIkey= "AIzaSyCFtOytfyyzseR7FrHiYxFv91LtMvZSAXM"
+APIkey= ""
 library(translateR)
 google_trans <- function(chs){
   chs = tolower(translate(content.vec = chs ,google.api.key =APIkey,source.lang = "zh-CN", target.lang="en"))
