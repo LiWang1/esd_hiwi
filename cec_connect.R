@@ -1,80 +1,70 @@
 ## 1）read the data 
 library(readxl)
 cec <- read_excel("all_cec.xlsx")
+
+# preprocessing of cec data
 cec = cec[!duplicated(cec[,c('plant_code','unit_name')]),]      # unique the dataframe
 
 cec$unit_name = as.numeric(cec$unit_name)
-cec$unit_name[which(cec$unit_name>10)] = cec$unit_name[which(cec$unit_name>10)] %% 10 
+cec$unit_name[which(cec$unit_name>20)] = cec$unit_name[which(cec$unit_name>20)] %% 10 
 
 cec$state_en = google_trans(cec$state)
-
-  #tolower(translate(content.vec = cec$state ,google.api.key =APIkey,source.lang = "zh-CN", target.lang="en"))
 cec$state_en = gsub(" province", "", cec$state_en)
 cec$state_en = gsub(" uygur autonomous region", "", cec$state_en)
 cec$state_en = gsub(" hui autonomous region", "", cec$state_en)
 cec$state_en = gsub(" autonomous region", "", cec$state_en)
 
-
 cec$short_name = gsub("富拉尔基","华电富拉尔基",cec$short_name)
 cec$short_name = gsub("穗恒运","恒运",cec$short_name)
 cec$short_name = gsub("裕华","华电河北裕华",cec$short_name)
 cec$short_name = gsub("达赉湖","满洲里",cec$short_name)
-cec$short_name = gsub("太仓协鑫","协鑫太仓",cec$short_name)
 
 cec$year_num =as.numeric(format(as.Date(cec$year, format="%Y-%m-%d"),"%Y"))
 
 # initialize 
 plant_data$cec_plant_code_test = NA
 plant_data$cec_unit_code_test = NA
-cec$check_status = 0
 
-# connect: 
+cec$check_status = 0
+cec$unit_check_status = 0
+
+# connect cec to plant database  
 for(j in 1:nrow(cec)){
-  #j = 71
-  #j = 285
-  #j = 462
-  #j = 768
   #j = 727 # 华能内蒙包二"
   #j = 1081 #"中电投江西景德镇"
   
   seg = seg_chs(cec$short_name[j]) # segment chinese 
   seg
-  state = cec$state_en           # state information 
+
   　
   num_info = vector()
   keyword_info = vector()
   company_info = vector()
   
   for(i in seg){
-    ## 1) filter out information from the company names:
-    # 1.1) redundant info
-    index_redundant = which(stri_detect_fixed(redundant_words, i))# dont have to do anything. 
-    
-    # 1.2) state info 
+    ## 1) filter out useful information from the company names:
     index_state = which(state_words==i)
-    
-    # 1.3) num info 
+    # 1.1) num info 
     index_num = which(stri_detect_fixed(num_words, i))
     num_info = append(num_info, num_words_ch[index_num])
     
-    # 1.4) company info 
+    # 1.2) company info 
     index_company = which(company_words==i)
     company_info = append(company_info, company_words[index_company])
     
-    # 1.5) keyword info
-    if(length(index_redundant)+length(index_state)+length(index_num)+length(index_company) == 0){
+    # 1.3) keyword info
+    if(length(index_state)+length(index_num)+length(index_company) == 0){
       keyword_info = append(keyword_info, i)
     }
   }
+  
   # 2.1) state_info index 
-  index_state = which(plant_data$STATE ==state[j])
+  index_state = which(plant_data$STATE ==cec$state_en[j])
   
   # 2.2) company_info index
   company_info = unique(company_info)
   company_info
   company_info = pinyin_trans(company_info)
-  
-  # e.g., stri_detect_fixed(c("江苏省", "江苏省"),"江苏") TRUE TRUE
   index_company = vector()
   if(length(company_info) == 1){
     index_company = which(stri_detect_fixed(plant_data$plant_company,company_info))
@@ -89,7 +79,6 @@ for(j in 1:nrow(cec)){
   keyword_info = unique(keyword_info)
   keyword_info
   keyword_info = pinyin_trans(keyword_info)
-  
   index_key = vector()
   if(length(keyword_info) == 1){
     index_key = which(stri_detect_fixed(plant_data$plant_company,keyword_info))
@@ -98,6 +87,7 @@ for(j in 1:nrow(cec)){
     index_key = which(stri_detect_fixed(plant_data$plant_company,keyword_info[1])
                       | stri_detect_fixed(plant_data$plant_company,keyword_info[2]))
   }
+  
   
   # 2.4) num_info index 
   num_info= unique(num_info)
@@ -112,22 +102,16 @@ for(j in 1:nrow(cec)){
   if(!is.na(cec$MW[j])){
     index_wm = which(abs(plant_data$MW-cec$MW[j])<=30)
   }
-  #if(is.na(cec$MW[j])){
-  #  index_wm = 1:nrow(plant_data)
-  #}
-  
   
   # 2.6) year_info index 
   index_year = vector()
   if(!is.na(cec$year_num[j])){
     index_year = which(abs(plant_data$YEAR-cec$year_num[j])<=1)
   }
-  #if(is.na(cec$year_num[j])){
-   # index_year = 1:nrow(plant_data)
-  #}
   
-  index_year_wm = intersect(index_wm,index_year)
-  
+  index_year_wm = intersect(index_wm,index_year) # index that matches year and wm info
+   
+  # without num info
   if(length(index_num)==0){
     index_cor = intersect(uniqueon(index_key, index_company), index_state)
     if(length(unique(plant_data$plant_company[index_cor]))==1){
@@ -140,13 +124,13 @@ for(j in 1:nrow(cec)){
     }
   }
   
+  # with num info
   if(length(index_num)>0){
     index_cor = intersect(uniqueon(index_key, index_company), intersect(index_state, index_num))
     if(length(unique(plant_data$plant_company[index_cor]))==1){
       plant_data$cec_plant_code_test[index_cor] = cec$plant_code[j]
     }
     else{
-      #index_cor = intersect(intersect(index_key, index_company), intersect(index_state, index_num))
       index_cor = intersect(uniqueon(index_key, index_company), intersect(index_state, index_num))
       index_cor = intersect(index_cor, index_year_wm)
       plant_data$cec_plant_code_test[index_cor] = cec$plant_code[j]
@@ -166,23 +150,32 @@ both_fill = which(!is.na(plant_data$CEC_PLANT_CODE) & !is.na(plant_data$cec_plan
 sum(plant_data$CEC_PLANT_CODE[both_fill]==plant_data$cec_plant_code_test[both_fill])/length(both_fill)
 
 
-# unit code: 
-cec$use_status = 0
+
 
 for(i in 1:nrow(plant_data)){
   if(!is.na(plant_data$cec_plant_code_test[i])){
     index_code = which((plant_data$cec_plant_code_test[i]==cec$plant_code)
                        &abs(plant_data$MW[i]-cec$MW)<100
                        &abs(plant_data$YEAR[i]-cec$year_num)<=1
-                       &cec$use_status==0)
+                       &cec$unit_check_status==0)
     index=min(index_code)
     plant_data$cec_unit_code_test[i] = cec$unit_name[index] 
-    cec$use_status[index] = 1
+    cec$unit_check_status[index] = 1
   }
 } 
 
-index_no_fill = which(is.na(plant_data$cec_unit_code_test) & !is.na(plant_data$cec_plant_code_test))
+sum(cec$unit_check_status)/sum(cec$check_status)
 
-plant_data$cec_unit_code_test[index_no_fill] = substrRight(plant_data$UNIT[index_no_fill],1)
+# fill in the using hours
+for( i in 1:nrow(plant_data)){
+  if(!is.na(plant_data$cec_plant_code_test[i]) & (!is.na(plant_data$cec_unit_code_test[i]))){
+    index = which(cec$plant_code == plant_data$cec_plant_code_test[i] & cec$unit_name == plant_data$cec_unit_code_test[i])
+    plant_data$cec_using_hours[i] = cec$using_hours[index]
+  }
+}
+
+
+
+
 
 

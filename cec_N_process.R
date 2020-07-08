@@ -14,3 +14,10 @@ using_hours <- function(f1_score, use_std_coeff, use_real_coeff, nsche_hours){
 
 result$using_hours = using_hours(result$f1, result$use_std_coeff, result$use_real_coeff, result$unsch_stop_hours)
 mean(result$using_hours)
+
+# asssign to database 
+for(i in 1:nrow(result)){
+  index = which(plant_data$cec_plant_code_test==result$plant_code[i] 
+                & plant_data$cec_unit_code_test == result$unit_code[i])
+  plant_data$cec_using_hours[index] = result$using_hours[i]
+}
