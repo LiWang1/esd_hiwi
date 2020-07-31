@@ -5,50 +5,145 @@
 # C is the provincial average concentration of one toxic heavy metal in feed coal (ug/g); 
 # R is the average release ratio of one toxic heavy metal in flue gas compared with the element concentration in feed coal from pulverized-coal (PC) boilers, circulating fluidized-bed (CFB) boilers or stoker fired (SF) boilers (%); 
 # PM, SO2 NOx and Hg represent the averaged fraction of one heavy metal co- benefit removed from flue gas by the conventional PM/SO2/NOX/Hg emission control devices (%), respectively.
+
+# HTEs emissions in CFPPs differ on the basis of the combustion method, coal type, and coal cleaning technique.
 library(readxl)
 library(openxlsx)
 library(data.table)
 
-# 1) E electricity generation 
-elec_genaration = read_excel("processeddata0717_cleanversion.xlsx")
-
-# 2) Ratio
-# extract data from cec
-coal_consupmtion_rate = read_excel("all_cec.xlsx")
-elec_genaration$coal_consumption_rate = NA
-for(i in 1:nrow(coal_consupmtion_rate)){
-  if(!is.na(coal_consupmtion_rate$coal_consumption[i])){
-    index = which(elec_genaration$cec_plant_code_test==coal_consupmtion_rate$plant_code[i] &
-                  elec_genaration$cec_unit_code_test == coal_consupmtion_rate$unit_name[i])
-    elec_genaration$coal_consumption_rate[index] = coal_consupmtion_rate$coal_consumption[i]
-  }
-}
-# default to 300 gce/kwh
-elec_genaration$coal_consumption_rate[which(is.na(elec_genaration$coal_consumption_rate))] = 300
+# read the data available 
+elec_genaration = read_excel("datainput_hm_models.xlsx")
+elec_genaration$coal_consumption_rate[which(is.na(elec_genaration$coal_consumption_rate & !is.na(elec_genaration$eletricity_generation)))] = 312 # annual report 2017
 elec_genaration$coal_consumption = elec_genaration$coal_consumption_rate*elec_genaration$eletricity_generation # unit: g 
-coal_total = ele_total*coal_consump_rate  # coal_consump_rate is partially available
 
-# 3) C provincial average concentration of one toxic heavy metal in feed coal (ug/g)
-# No information for Hong Kong, and it is assume to be the same as Guangdong
-coal_hm_province = read_excel("province_heavymetals_china_data.xlsx") #ug/g
+# raw coal hm concentrations
+coal_hm_province = read_excel("province_heavymetals_china_data.xlsx") # provincial average concentration https://www.sciencedirect.com/science/article/pii/S0959652615005417
+coal_hm_type = read_excel("coaltype_hm_data.xlsx")  # average concentration of different types: https://pubs.acs.org/doi/10.1021/ef3017305
+hm_concentration <- function(prov, coal_type){
+  index_state = which(coal_hm_province$province==prov)
+  # if coaltype not exist, use the province average
+  if(is.na(coal_type)){
+    coal_concentration = coal_hm_province[index_state, 2:7]
+  }  
+  
+  # if coaltype exist 
+  if(!is.na(coal_type)){
+    coal_concentration = NA
+    coal_concentration_prov = coal_hm_province[index_state, 2:7]
+    index_type = which(stri_detect_fixed(coal_type, coal_hm_type$coaltype))
+    for(j in 1:length(coal_concentration_prov)){
+      low = 2+(j-1)*3
+      high = 4+(j-1)*3
+      range = coal_hm_type[index_type, low:high]
+      
+      # if the province concentration falls in the range, take it as the concentration
+      if(coal_concentration_prov[j]>range[2] & coal_concentration_prov[j]<range[3]){
+        coal_concentration[j] = coal_concentration_prov[j]
+      }
+      
+      # if not, choose the mean of the coal type 
+      else{
+        coal_concentration[j] = range[1]
+      }
+      coal_concentration = unlist(coal_concentration)
+    }
+  }
+  return(coal_concentration)
+}
 
-# 4) R release rate boilers
+# pre-treament of the coal, mainly coal washing. 
+pre_treatment <- function(hm_concentration_ori){
+  ratio_washing = 0.2193 # params, taken from https://www.sciencedirect.com/science/article/pii/S0959652615005417
+  removal_rate_washing = c(0.54, 0.363, 0.322, 0.58, 0.5, 0.3)
+  
+  for(i in 1:length(hm_concentration_ori)){
+    hm_concentration_ori[i] = hm_concentration_ori[i]*(1-ratio_washing) + ratio_washing*hm_concentration_ori[i]*(1-removal_rate_washing[i])
+  }
+  return(hm_concentration_ori)
+} 
+
+# combustion type, either 'pc', 'cfb' or 'sf'
 # check the excel: "release_rate_boiler.xslx" for detailed releasing rate, here in the model, we use an 
-# average release rate for the boilers. 
-# As: 89.63%   Pb: 71.86%   Cd: 78.53%   Cr: 71.21% 
-release_rate = c(0.8963, 0.7186, 0.7853, 0.7121)
+# the function has been built based on the facts: 
+# 1, china has a total of more than 3000 CFB boiler units, the largest number of such units in the world.
+# 2, after 2012, there is a stricter pollution requirements for new built coal power plants in China -> cfb has less emission compared to pc
+# 3, stoker fired boiler is mainly for local or industrial heat or heat and power generating plants, and less efficient but flexible
+release_rate <- function(MW, year){
+  # decide the boiler type from MW and year 
+  type = NA
+  if(is.na(MW) | is.na(year)){
+    type = 'cfb'
+  }
+  else{
+    if(MW>=100 & year >=2012){
+      type = 'cfb'
+    }
+    if(MW>=100 & year < 2012){
+      type = sample(c('cfb','pc'), size = 1, prob = c(1, 1))
+    }
+    if(MW<100 & year >= 2012){
+      type = sample(c('cfb', 'sf'), size = 1, prob = c(1, 1))
+    }
+    if(MW<100 & year < 2012){
+      type = sample(c('cfb', 'sf', 'pc'), size = 1, prob = c(1, 1, 1))
+    }
+  }
+  
+  # decide the release rate according to boiler type
+  if(type == 'cfb'){
+    release_rate = c(0.756, 0.7733, 0.915, 0.813, 0.9892, 0.9805)         # cfb boiler 
+  }
+  if(type == 'pc'){
+    release_rate = c(0.9846, 0.9625, 0.9494, 0.845, 0.995, 0.9622)         # pc boiler   https://www.sciencedirect.com/science/article/pii/S0959652615005417
+  }
+  if(type == 'sf'){
+    release_rate = c(0.7718, 0.3387, 0.4253, 0.3608, 0.8315, 0.8095)       # stoker fired
+  }
+  
+  return(release_rate)
+}
 
-# 5) PM/SO2/NOx/Hg removal rate 
+# Posttreatment: PM/SO2/NOx/Hg removal rate 
+# Reference: Tian et al., 2010, 2011, 2012a, b 
 # check the excel: "removal_rate_APCD.xslx" for detailed releasing rate
-removal_rate_table = read_excel("removal_rates_matrix.xlsx")
+removal_rate_table = read_excel("apcd_removal_efficiency_extended.xlsx")
 # sequence: ESP FF WFGD SCR (1 means exist, 0 means doesnt exist)
-apcd_setup = c(1, 0, 1, 1) # e.g., ESP + WFGD + SCR
-removal_rate_cal <- function(apcd_setup){
-  removal_rate = c(1, 1, 1, 1) # initial removal rates for As, Pb, Cd, Cr 
+removal_rate_cal <- function(depm, desul, denox){
+  apcd_setup = c(0, 0, 0, 0) 
+  # decide the apcd combination 
+  if(!is.na(depm)){
+    if(depm == 'ESP'){
+      apcd_setup[1] = 1
+    }
+    if(depm == 'FF'){
+      apcd_setup[2] = 1
+    }
+  }
+  if(is.na(depm)){
+    apcd_setup[1] = 1
+  }
+  
+  if(!is.na(desul)){
+    if(desul == 'wet'){
+      apcd_setup[3] = 1
+    }
+  }
+  
+  if(!is.na(denox)){
+    if(denox == 'SCR/SMCR'){
+      apcd_setup[4] = 1
+    }
+  }
+  
+  # ... to be added 
+
+  
+  removal_rate = c(1, 1, 1, 1, 1, 1) # initial removal rates for As, Pb, Cd, Cr 
   # ESP
   if(apcd_setup[1] == 1){
     removal_rate = removal_rate*(1-removal_rate_table$ESP/100)
   }
+  
   if(apcd_setup[2] == 1){
     removal_rate = removal_rate*(1-removal_rate_table$FF/100)
   }
@@ -58,34 +153,56 @@ removal_rate_cal <- function(apcd_setup){
   if(apcd_setup[4] == 1){
     removal_rate = removal_rate*(1-removal_rate_table$SCR/100)
   }
+  return(removal_rate)
 }
+
+
+
 
 # calculate the total heavy metal emission (unit:g)
 elec_genaration$As_emission = NA
 elec_genaration$Pb_emission = NA
 elec_genaration$Cd_emission = NA
 elec_genaration$Cr_emission = NA
+elec_genaration$Hg_emission = NA
+elec_genaration$Se_emission = NA
 
 for(i in 1:nrow(elec_genaration)){
-  #print(i)
+  print(i)
   if(!is.na(elec_genaration$coal_consumption[i])){
-    #i = 3
-    index_state = which(coal_hm_province$province==elec_genaration$STATE[i])
-    if(length(index_state)>0){
-      coal_vector = coal_hm_province[index_state, 2:5]
-      #coal_vector
-      removal_rate = removal_rate_cal(apcd_setup)
-      coal_hm_ug = coal_vector*elec_genaration$coal_consumption[i]  # ug 
-      coal_emission = coal_hm_ug*release_rate*removal_rate
-      #coal_emission
-      elec_genaration$As_emission[i] = coal_emission[1]/1000 #ug->g
-      elec_genaration$Pb_emission[i] = coal_emission[2]/1000 
-      elec_genaration$Cd_emission[i]  = coal_emission[3]/1000 
-      elec_genaration$Cr_emission[i]  = coal_emission[4]/1000  
-    }
+    # hm orginal amount
+    hm_ori_amount = elec_genaration$coal_consumption[i]*hm_concentration(elec_genaration$STATE[i], elec_genaration$coaltype[i])
+    
+    # pretreatment 
+    hm_amount = pre_treatment(hm_ori_amount)
+    
+    # combustion 
+    hm_amount = hm_amount*release_rate(elec_genaration$MW[i], elec_genaration$YEAR[i])
+    
+    # posttreament 
+    hm_amount = hm_amount*removal_rate_cal(elec_genaration$depm[i],elec_genaration$desul[i], elec_genaration$denox[i])
+    
+    # convert unit ug-> t
+    hm_amount = hm_amount/1000000000000
+    
+    # assign 
+    elec_genaration$As_emission[i] = hm_amount[1]
+    elec_genaration$Pb_emission[i] = hm_amount[2]
+    elec_genaration$Cd_emission[i] = hm_amount[3]
+    elec_genaration$Cr_emission[i] = hm_amount[4]
+    elec_genaration$Hg_emission[i] = hm_amount[5]
+    elec_genaration$Se_emission[i] = hm_amount[6]
   }
 }
 
-# age and removal efficiency?
+index_as = which(!is.na(elec_genaration$As_emission))
+sum(unlist(elec_genaration$As_emission)[index_as]) # As 
+sum(unlist(elec_genaration$Pb_emission)[index_as]) # Pb 
+sum(unlist(elec_genaration$Cd_emission)[index_as]) # Cd 
+sum(unlist(elec_genaration$Cr_emission)[index_as]) # Cr 
+
+
+write.xlsx(elec_genaration, "result_hm_emissions0731.xlsx")
+
 
 
