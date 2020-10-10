@@ -9,6 +9,7 @@
 # PM, SO2 NOx and Hg represent the averaged fraction of one heavy metal co- benefit removed from flue gas by the conventional PM/SO2/NOX/Hg emission control devices (%), respectively.
 # HTEs emissions in CFPPs differ on the basis of the combustion method, coal type, and coal cleaning technique.
 hm_model <- function(elec_genaration){
+  
   elec_genaration$coal_consumption_rate[which(is.na(elec_genaration$coal_consumption_rate & !is.na(elec_genaration$eletricity_generation)))] = 312 # annual report 2017
   elec_genaration$coal_consumption = elec_genaration$coal_consumption_rate*elec_genaration$eletricity_generation # unit: g 
   
@@ -576,10 +577,15 @@ regre_coal_rate <- function(elec_genaration){
 
 
 ## for NAs of APCDs
-fill_NA_devices <- function(status, year, device, cat, scenario){
+fill_NA_devices <- function(status, year, WM, device, cat, scenario){
   index_below = which(status=="Operating" & !is.na(year) & year<2012 & is.na(device))
   index_above =  which(status=="Operating" & !is.na(year) & year>=2012 & is.na(device))
   index_na =  which(status=="Operating" & is.na(year) & is.na(device))
+  
+  index_smallunits = which(status=="Operating" & !is.na(WM) & WM<100 & is.na(device))
+  index_bigunits =  which(status=="Operating" & !is.na(WM) & WM<100 & is.na(device))
+  index_wm_na =  which(status=="Operating" & is.na(WM) & is.na(device))
+  
   if(scenario == 'guideline'){
     device[index_above] = cat
     device[index_na] = cat
@@ -595,20 +601,27 @@ fill_NA_devices <- function(status, year, device, cat, scenario){
     device[index_na] = paste(cat, "1/2", sep="")
     device[index_below] = paste(cat, "1/2", sep="")
   }
+  
+  if(scenario == 'smallunits' ){
+    device[index_bigunits] = cat
+    device[index_wm_na] = 'none'
+    device[index_smallunits] = 'none'
+  }
   return(device)
 }
 
 ## wastewater model 
 # assumptions made: 
-# 1) the hm removal efficiency of pre-treatment for  WFGD 
+# 1) the hm removal efficiency of pre-treatment for WFGD 
 # 2) whether there is post treatments for certain units (the result is randomly sampled)
 # pre-treatment: neutralization - flocculation - precipitation 
-# post-treatment: 1) to atomize the high salinity wastewater and direct them into the flue gas 
+# post-treatment: 2.1) to atomize the high salinity wastewater and direct them into the flue gas 
 # channel, the water get vaporated and the heavy metals can be captured by the dust removal device; 
-# 2) To make use of the heat in the plant to evaporate the water and the crystals are kept and treated.
-# 3) the hm removal efficiency of pre-treatment for  sea water FGD
-# 4) the sea water FGD doesnt have any other post treatment
+# 2.2) To make use of the heat in the plant to evaporate the water and the crystals are kept and treated.
+# 3) the hm removal efficiency of pre-treatment for sea water FGD
+# 4) the sea water FGD doesn't have any other post treatment
 # 5) for other FGD methods, they don't produce wastewater
+
 hm_wastewater_model <- function(hm_data){
   # calculate the ratios between the amount in the wastewater and that in the flue gas
   removal_rate_table = read_excel("apcd_removal_efficiency_extended.xlsx")
@@ -686,6 +699,7 @@ hm_wastewater_model <- function(hm_data){
       hm_data$Hg_ww_out[i] = ratio_sea[5]*unlist(hm_data$Hg_emission[i])*1000000000
       hm_data$Se_ww_out[i] = ratio_sea[6]*unlist(hm_data$Se_emission[i])*1000000000
     }
+    
     # else 
     if(hm_data$desul[i] != 'sea' & hm_data$desul[i] != 'WFGD' & hm_data$desul[i] != 'WFGD1/2' & hm_data$status_2016[i]=="Operating"){
       hm_data$As_ww_out[i] = 0
@@ -699,7 +713,26 @@ hm_wastewater_model <- function(hm_data){
   return(hm_data)
 }
 
+# to calculate the absolute difference of two point coordinates value.  
+abs_dist <- function(lat, lng, lat_vec, lng_vec){
+  lat_vec[which(is.na(lat_vec))] = 0 
+  lng_vec[which(is.na(lng_vec))] = 0 
+  
+  dist = rep(NA, length(lat_vec))
+  for(i in 1:length(lat_vec)){
+    dist[i] = abs(lat_vec[i] - lat) + abs(lng_vec[i]-lng)
+  }
+  return(dist)
+}
 
-
-
-
+# to calculate the geographical distance between two points 
+distance <- function(lat1, lng1, lat2, lng2){
+  dist = rep(NA, length(lat1))
+  for(i in 1:length(lat1)){
+    #print(i)
+    if(!is.na(lat1[i]) & !is.na(lng1[i]) & !is.na(lat2[i]) & !is.na(lng2[i])){
+      dist[i]=distm(c(lng1[i], lat1[i]), c(lng2[i], lat2[i]), fun = distHaversine)
+    }
+  }
+  return(dist)
+} 
