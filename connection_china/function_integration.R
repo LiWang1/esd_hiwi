@@ -8,14 +8,14 @@ pinyin_trans <- function(data){
 }
 
 # google translation: 
-APIkey= "AIzaSyBbxd83F7usVuP9iQdYeFkwELCjvZsQcg0"
+APIkey= ""
 google_trans <- function(chs){
   chs = tolower(translate(content.vec = chs ,google.api.key =APIkey, source.lang = "zh-CN", target.lang="en"))
   return(chs)
 }
 
 # google map api 
-api_geocoding = "AIzaSyAoGt00VCk0ziyAEToqHORsTedV7Bij9rI"
+api_geocoding = ""
 get_coordinates_google <- function(addr, api_key){
   tryCatch(
     expr = {
@@ -42,7 +42,7 @@ get_coordinates_google <- function(addr, api_key){
 
 # baidu api 
 options(digits=12)      # keep the digit for the coordinates
-api_key_baidu = 'fWmM8qGuIoCAQxLII2sB5RWgQKyaBKNc'  # 6000 queries/day for free
+api_key_baidu = ''  # 6000 queries/day for free
 get_coordinates_baidu <- function(address, api_key){
   url_address = paste('http://api.map.baidu.com/place/v2/suggestion?address=', address, '&output=json&ak=', api_key,sep = '')
   map_info = fromJSON(getURLContent(url_address))
