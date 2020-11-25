@@ -182,6 +182,19 @@ preprocess <- function(plant_data){
   plant_data$unit_num = substrRight(plant_data$UNIT, 2)
   plant_data$unit_num = as.numeric(gsub("\\D", "", plant_data$unit_num))
   plant_data$wiki_code = NA
+  plant_data$plant_status_wiki = NA
+  plant_data$lat_wiki = NA
+  plant_data$lng_wiki= NA
+  plant_data$type_wiki = NA
+  plant_data$coaltype_wiki = NA
+  plant_data$coordinates = NA
+  
+  plant_data$city_lat = NA
+  plant_data$city_lng = NA
+  plant_data$city_lat_min = NA
+  plant_data$city_lng_min = NA
+  plant_data$city_lat_max = NA
+  plant_data$city_lng_max = NA
   
   plant_data$plant_company = paste(tolower(plant_data$COMPANY), tolower(plant_data$PLANT))
   plant_data$plant_company_extend = paste(tolower(plant_data$COMPANY), tolower(plant_data$PLANT), 
@@ -594,16 +607,147 @@ wiki_connect <- function(wiki, plant_data){
     }
   }
   
+  # connect wiki info to plant database
+  for(i in 1:nrow(plant_data)){
+    if(!is.na(plant_data$wiki_code[i])){
+      index = which(wiki$wiki_code==plant_data$wiki_code[i])
+      plant_data$plant_status_wiki[i] = wiki$status_[index]
+      plant_data$lat_wiki[i] = wiki$lat[index]
+      plant_data$lng_wiki[i] = wiki$lng[index]
+      plant_data$type_wiki[i] = wiki$Type[index]
+      plant_data$coaltype_wiki[i] = wiki$coaltype[index]
+    }
+  }
+  
   ## check the ratio of used wiki data
   ratio = sum(wiki$check_status)/nrow(wiki)
   print(ratio)
   return(plant_data)
 }
-
-
-
-
-
-
+# another coordinates resource
+coordinate_connect <- function(coordinates, plant_data){
+  ## connect the coordinates to database
+  for(j in 1:nrow(coordinates)){
+    seg = seg_chs(coordinates$chinese_name[j]) # segment chinese 
+    seg
+    
+    num_info = vector()
+    keyword_info = vector()
+    company_info = vector()
+    
+    for(i in seg){
+      ## 1) filter out information from the company names:
+      index_state = which(state_words==i)
+      # 1.1) num info 
+      index_num = which(stri_detect_fixed(num_words, i))
+      num_info = append(num_info, num_words_ch[index_num])
+      
+      # 1.2) company info 
+      index_company = which(company_words==i)
+      company_info = append(company_info, company_words[index_company])
+      
+      # 1.3) keyword info
+      if(length(index_state)+length(index_num)+length(index_company) == 0){
+        keyword_info = append(keyword_info, i)
+      }
+    }
+    
+    ## 2) connect the information 
+    
+    # 2.1) state_info index 
+    index_state = which(plant_data$STATE == coordinates$state_en[j])
+    
+    # 2.2) company_info index
+    company_info = unique(company_info)
+    company_info = pinyin_trans(company_info)
+    company_info
+    index_company = vector()
+    if(length(company_info) == 1){
+      index_company = which(stri_detect_fixed(plant_data$COMPANY,company_info))
+    }
+    if(length(company_info) > 1){
+      index_company = which(stri_detect_fixed(plant_data$COMPANY,company_info[1])
+                            | stri_detect_fixed(plant_data$COMPANY,company_info[2]))
+    }
+    
+    # 2.3) keyword_info index
+    keyword_info = unique(keyword_info)
+    keyword_info
+    index_key = vector()
+    keyword_info = pinyin_trans(keyword_info)
+    if(length(keyword_info) == 1){
+      index_key = which(stri_detect_fixed(plant_data$PLANT,keyword_info))
+    }
+    if(length(keyword_info) >1){
+      index_key = which(stri_detect_fixed(plant_data$PLANT,keyword_info[1])
+                        & stri_detect_fixed(plant_data$PLANT,keyword_info[2]))
+    }
+    
+    
+    # 2.4) num_info index 
+    num_info= unique(num_info)
+    num_info
+    index_num = 1:nrow(plant_data)
+    if(length(num_info) >= 1){
+      index_num = which(stri_detect_fixed(plant_data$PLANT,num_info[1]))
+    } 
+    
+    # 2.5) MW inform 
+    index_mw = which(plant_data$MW>=100)
+    
+    index_qualified = intersect(intersect(index_key, index_mw),intersect(index_num,index_state))
+    plant_data$coordinates[index_qualified] = coordinates$coordinates[j]
+  }
+  
+  ## merge the two coordinates 
+  lat_long = as.data.frame(str_split(plant_data$coordinates, ' ', simplify = TRUE))
+  index_coords = which(!is.na(lat_long$V1))
+  lat = as.numeric(char2dms(as.character(lat_long$V1[index_coords]),chd='°',chm='′',chs='″'))
+  lng = as.numeric(char2dms(as.character(lat_long$V2[index_coords]),chd='°',chm='′',chs='″'))
+  plant_data$lat_wiki2=NA
+  plant_data$lat_wiki2[index_coords] = lat
+  plant_data$lng_wiki2=NA
+  plant_data$lng_wiki2[index_coords] = lng
+  
+  plant_data$lat = plant_data$lat_wiki
+  plant_data$lng = plant_data$lng_wiki
+  
+  index_lat_na = which(is.na(plant_data$lat_wiki))
+  index_wiki_lat2 = which(!is.na(plant_data$lat_wiki2))
+  index_lat_add = intersect(index_lat_na, index_wiki_lat2)
+  plant_data$lat[index_lat_add] = plant_data$lat_wiki2[index_lat_add]
+  
+  index_lng_na = which(is.na(plant_data$lng_wiki))
+  index_wiki_lng2 = which(!is.na(plant_data$lng_wiki2))
+  index_lng_add = intersect(index_lng_na, index_wiki_lng2)
+  plant_data$lng[index_lng_add] = plant_data$lng_wiki2[index_lng_add]
+  # to validate by checking if the unit coordinates is within the city 
+  for(i in 1:nrow(plant_data)){
+    if(!is.na(plant_data$CITY[i])){
+      city = paste(plant_data$CITY[i], plant_data$STATE[i], 'China', sep = " ")
+      coordinates = get_coordinates_google(city, api_geocoding)
+      plant_data$city_lat[i] = coordinates[1]
+      plant_data$city_lng[i] = coordinates[2]
+      
+      # city boundary
+      plant_data$city_lat_min[i] = coordinates[3]
+      plant_data$city_lng_min[i] = coordinates[4]
+      plant_data$city_lat_max[i] = coordinates[5]
+      plant_data$city_lng_max[i] = coordinates[6]
+      
+      # make sure the unit lat and lng within the city boundary
+      m = !is.na(plant_data$lat[i]) && !is.na(plant_data$lng[i]) && !is.na(plant_data$city_lat_min[i]) && !is.na(plant_data$city_lng_min[i]) && !is.na(plant_data$city_lat_max[i]) && !is.na(plant_data$city_lng_max[i])
+      if(m){
+        if(plant_data$lat[i]<plant_data$city_lat_min[i] || plant_data$lat[i]>plant_data$city_lat_max[i]
+           || plant_data$lng[i]<plant_data$city_lng_min[i] || plant_data$lng[i]>plant_data$city_lng_max[i]){
+          plant_data$lat[i] = NA
+          plant_data$lng[i] = NA
+        }
+      }
+    }
+  }
+  
+  return(plant_data)
+}
 
 

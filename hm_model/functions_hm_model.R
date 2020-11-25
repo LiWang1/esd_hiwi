@@ -103,8 +103,8 @@ hm_model <- function(elec_genaration){
   removal_rate_table$FGD_dry = 0.8*removal_rate_table$WFGD  # 0.5 is a assumption 
   removal_rate_table$FGD_seawater = removal_rate_table$WFGD
   # dust default as -- ESP 
-  index_esp_na = which(!is.na(elec_genaration$coal_consumption) & is.na(elec_genaration$depm))
-  elec_genaration$depm[index_esp_na] = 'ESP'
+  #index_esp_na = which(!is.na(elec_genaration$coal_consumption) & is.na(elec_genaration$depm))
+  #elec_genaration$depm[index_esp_na] = 'ESP'
   
   # sequence: ESP FF WFGD SCR (1 means exist, 0 means doesnt exist)
   removal_rate_cal <- function(depm, desul, denox, year){
@@ -801,15 +801,15 @@ cf_cal <- function(loc, pop){
 lcia <- function(As, Cd, Cr, Hg, Pb, Se, cf){
   # please mentioned the heavy metal ions distribution here
   # As(+3, +5, others): e.g., (0.5, 0.5, 0)
-  As_distr = c(0.5, 0.5)
+  As_distr = c(0.1, 0.9)
   # Cd(+2, others): e.g., (1, 0)
-  Cd_distr = c(1)
+  Cd_distr = c(0.5)
   # Cr(+3, +6, others): e.g., (0.8, 0.2, 0)
   Cr_distr = c(0.8, 0.2)
-  # Hg(+2, others): e.g., (0.27, 0.73)
-  Hg_distr = c(0.27)
+  # Hg(+2, others): e.g., (0.37, 0.63)
+  Hg_distr = c(0.37) # Hg(2+)
   # Pb(+2, others): e.g., (1, 0)
-  Pb_distr = c(1)
+  Pb_distr = c(1)  
   # Se(+4, others): e.g.m (1, 0)
   Se_distr = c(1)
   dist_vec = c(As_distr, Cd_distr, Cr_distr, Hg_distr, Pb_distr, Se_distr)
