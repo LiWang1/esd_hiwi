@@ -97,14 +97,15 @@ hm_results$Pb_impact = NA
 hm_results$Se_impact = NA
 
 # add influence
-
 for(i in 1:nrow(hm_results)){
+#for(i in 1:10){
   if(hm_results$status_2016[i]=="Operating" & !is.na(hm_results$As_emission[i])){
-    print(i)
+    #print(i)
     # calculate the characterization factor
     charac_factors = cf_cal(hm_results$STATE[i], hm_results$pop_density[i])
     # calculate the impact (t-kg)
-    impact = 1000*lcia(hm_results$As_emission[i], hm_results$Cd_emission[i], hm_results$Cr_emission[i], hm_results$Hg_emission[i], hm_results$Pb_emission[i], hm_results$Se_emission[i], charac_factors)
+    impact = 1000*lcia(hm_results$As_emission[i], hm_results$Cd_emission[i], hm_results$Cr_emission[i], hm_results$Hg_emission[i], hm_results$Pb_emission[i], 
+                       hm_results$Se_emission[i], charac_factors) # Emission to urban air(total)
     
     hm_results$As_impact[i]= sum(impact[1:2])
     hm_results$Cd_impact[i] = impact[3]
@@ -114,10 +115,13 @@ for(i in 1:nrow(hm_results)){
     hm_results$Se_impact[i] = impact[8]
   }
 }
-
+# total impact  
 sum(hm_results$Cr_impact[which(!is.na(hm_results$Cr_impact))])
-
-
+sum(hm_results$As_impact[which(!is.na(hm_results$As_impact))])
+sum(hm_results$Cd_impact[which(!is.na(hm_results$Cd_impact))])
+sum(hm_results$Se_impact[which(!is.na(hm_results$Cd_impact))])
+sum(hm_results$Pb_impact[which(!is.na(hm_results$Cd_impact))])
+sum(hm_results$Hg_impact[which(!is.na(hm_results$Hg_impact))])
 
 
 ### correlation analysis 

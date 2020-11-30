@@ -713,6 +713,70 @@ hm_wastewater_model <- function(hm_data){
   return(hm_data)
 }
 
+# characterization_factor(location, population) choosing based on locations and population density
+# 1) location of the unit (Western/Middle/Eastern China)
+# 2) population:(e.g., low population/middle population/high population)
+
+cf_cal <- function(loc, pop){
+  cf_profile = read_excel("china(non-OECD)industry.xlsx")
+  cf_profile[, 4:239] = as.data.frame(sapply(cf_profile[, 4:239] , as.numeric)) #numeric 
+  # decide location 
+  location = NA 
+  western = c('xinjiang', 'inner mongolia', 'qinghai', 'gansu', 'ningxia', 'shaanxi', 'sichuan', 'tibet', 'chongqing', 'guizhou', 'yunnan')
+  eastern = c('heilongjiang', 'jilin', 'liaoning', 'beijing', 'tianjin', 'hebei', 'shandong', 'jiangsu', 'shanghai', 'zhejiang', 'fujian', 'guangdong', 'guangxi', 'hainan', 'hongkong')
+  central = c('shanxi', 'henan', 'hubei', 'hunan', 'jiangxi', 'anhui')
+  if(!is.na(loc) & loc %in% western){
+    location = 'west'
+  }
+  if(!is.na(loc) & loc %in% eastern){
+    location = 'east'
+  }
+  if(loc %in% central | is.na(loc)){
+    location = 'mid'
+  }
+  
+  # decide pop density
+  pop_density = NA 
+  if( !is.na(pop) & pop < 100){
+    pop_density = 'low'
+  }
+  if((pop>=100 & pop<5000)|is.na(pop)){
+    pop_density = 'midium'
+  }
+  if(!is.na(pop) & pop>=5000){
+    pop_density = 'high'
+  }
+  index = which(cf_profile$loc==location & cf_profile$pop_ds==pop_density)
+  return(cf_profile[index, 3:239])
+}
+
+# calculate the lcia based on the heavy metal distributions
+lcia <- function(As, Cd, Cr, Hg, Pb, Se, cf){
+  # please mentioned the heavy metal ions distribution here
+  # As(+3, +5, others): e.g., (0.5, 0.5, 0)
+  As_distr = c(0.1, 0.9)
+  # Cd(+2, others): e.g., (1, 0)
+  Cd_distr = c(1)
+  # Cr(+3, +6, others): e.g., (0.8, 0.2, 0)
+  Cr_distr = c(0.95, 0.05)
+  # Hg(+2, others): e.g., (0.37, 0.63)
+  Hg_distr = c(0.37) # Hg(2+)
+  # Pb(+2, others): e.g., (1, 0)
+  Pb_distr = c(1)  
+  # Se(+4, others): e.g.m (1, 0)
+  Se_distr = c(1)
+  dist_vec = c(As_distr, Cd_distr, Cr_distr, Hg_distr, Pb_distr, Se_distr)
+  #amount_vec = c(hm_results$As_emission[i], hm_results$As_emission[i],hm_results$Cd_emission[i], hm_results$Cr_emission[i],hm_results$Cr_emission[i], hm_results$Hg_emission[i], hm_results$Pb_emission[i], 
+  #hm_results$Se_emission[i])
+  amount_vec = c(As, As, Cd, Cr, Cr, Hg,Pb,Se)
+  amount_dist = dist_vec*amount_vec
+  
+  lcia_result = charac_factors[,2:71]$"36"*amount_dist # 36 is the index for emission to urban air. 
+  lcia_result[is.na(lcia_result)] = 0
+  return(lcia_result)
+}
+
+
 # to calculate the absolute difference of two point coordinates value.  
 abs_dist <- function(lat, lng, lat_vec, lng_vec){
   lat_vec[which(is.na(lat_vec))] = 0 
@@ -758,69 +822,3 @@ addpopulationdensity <- function(processdata, pop_ds){
   }
   return(processdata)
 }
-
-
-# characterization_factor(location, population) choosing based on locations and population density
-# 1) location of the unit (Western/Middle/Eastern China)
-# 2) population:(e.g., low population/middle population/high population)
-
-cf_cal <- function(loc, pop){
-  cf_profile = read_excel("china(non-OECD)industry.xlsx")
-  cf_profile[, 4:239] = as.data.frame(sapply(cf_profile[, 4:239] , as.numeric)) #numeric 
-  # decide location 
-  location = NA 
-  western = c('xinjiang', 'inner mongolia', 'qinghai', 'gansu', 'ningxia', 'shaanxi', 'sichuan', 'tibet', 'chongqing', 'guizhou', 'yunnan')
-  eastern = c('heilongjiang', 'jilin', 'liaoning', 'beijing', 'tianjin', 'hebei', 'shandong', 'jiangsu', 'shanghai', 'zhejiang', 'fujian', 'guangdong', 'guangxi', 'hainan', 'hongkong')
-  central = c('shanxi', 'henan', 'hubei', 'hunan', 'jiangxi', 'anhui')
-  if(!is.na(loc) & loc %in% western){
-    location = 'west'
-  }
-  if(!is.na(loc) & loc %in% eastern){
-    location = 'east'
-  }
-  if(loc %in% central | is.na(loc)){
-    location = 'mid'
-  }
-  
-  # decide pop density
-  pop_density = NA 
-  if( !is.na(pop) & pop < 100){
-    pop_density = 'low'
-  }
-  if((pop>=100 & pop<5000)|is.na(pop)){
-    pop_density = 'midium'
-  }
-  if(!is.na(pop) & pop>=5000){
-    pop_density = 'high'
-  }
-  index = which(cf_profile$loc==location & cf_profile$pop_ds==pop_density)
-  return(cf_profile[index, 3:239])
-}
-
-# calculate the lcia based on the heavy metal distributions
-lcia <- function(As, Cd, Cr, Hg, Pb, Se, cf){
-  # please mentioned the heavy metal ions distribution here
-  # As(+3, +5, others): e.g., (0.5, 0.5, 0)
-  As_distr = c(0.1, 0.9)
-  # Cd(+2, others): e.g., (1, 0)
-  Cd_distr = c(0.5)
-  # Cr(+3, +6, others): e.g., (0.8, 0.2, 0)
-  Cr_distr = c(0.8, 0.2)
-  # Hg(+2, others): e.g., (0.37, 0.63)
-  Hg_distr = c(0.37) # Hg(2+)
-  # Pb(+2, others): e.g., (1, 0)
-  Pb_distr = c(1)  
-  # Se(+4, others): e.g.m (1, 0)
-  Se_distr = c(1)
-  dist_vec = c(As_distr, Cd_distr, Cr_distr, Hg_distr, Pb_distr, Se_distr)
-  amount_vec = c(As, As, Cd, Cr, Cr, Hg,Pb,Se)
-  amount_dist = dist_vec*amount_vec
-  
-  #lcia = amount * cf
-  lcia_mat = data.frame(mapply(`*`,cf[,2:71],amount_dist))
-  result = lcia_mat$X30 # Emission to household indoor air(total)
-  return(result)
-}
-
-
-
