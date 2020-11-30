@@ -7,5 +7,5 @@ There are several data resources in Chinese that give more information about the
 3) The data from wikipedia (wiki);
 4) The data from China State Grid (SGCC).
 
-### 2) heavy metal emission model and LCIA for coal power plants
-In this part, a heavy metal model was first built to calculate the heavy metals (As, Cd, Cr, Hg, Pb, Se) emissions in the flue gas of coal power plants. Characterization factors have been calculated with the adjusted USE-tox model. Life Cycle Impact is calculated with the amount of emissions and the characterization factors. 
+### 2) Heavy metal emission model and LCIA for coal power plants
+In this part, a heavy metal model was first built to calculate the heavy metals (As, Cd, Cr, Hg, Pb, Se) emissions in the flue gas of coal power plants. Characterization factors have been calculated with USE-tox model. Life Cycle Impact is then calculated for the units. 
